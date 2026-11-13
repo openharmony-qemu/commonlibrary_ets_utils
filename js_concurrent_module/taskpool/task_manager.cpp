@@ -192,14 +192,17 @@ napi_value TaskManager::GetThreadInfos(napi_env env)
     {
         std::lock_guard<std::recursive_mutex> lock(workersMutex_);
         for (auto& worker : workers_) {
-            if (worker->workerEnv_ == nullptr) {
+            if (!worker->threadInfoReady_.load(std::memory_order_acquire) || worker->tid_ <= 0) {
                 continue;
             }
             auto threadInfo = std::make_unique<ThreadInfo>();
             threadInfo->tid = worker->tid_;
-            threadInfo->priority = worker->priority_;
-            for (auto& id : worker->currentTaskId_) {
-                threadInfo->currentTaskId.emplace_back(id);
+            threadInfo->priority = worker->priority_.load(std::memory_order_relaxed);
+            {
+                std::lock_guard<std::mutex> taskLock(worker->currentTaskIdMutex_);
+                for (auto& id : worker->currentTaskId_) {
+                    threadInfo->currentTaskId.emplace_back(id);
+                }
             }
             threadInfoSet.emplace(std::move(threadInfo));
         }
@@ -834,6 +837,9 @@ void TaskManager::NotifyWorkerIdle(Worker* worker)
 
 void TaskManager::NotifyWorkerCreated(Worker* worker)
 {
+    // Runtime, tid and handles were initialized on the worker thread. Do not
+    // expose a partially constructed worker through getTaskPoolInfo().
+    worker->threadInfoReady_.store(true, std::memory_order_release);
     NotifyWorkerIdle(worker);
     expandingCount_--;
 }

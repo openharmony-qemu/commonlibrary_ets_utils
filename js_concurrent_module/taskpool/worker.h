@@ -220,7 +220,8 @@ private:
     std::atomic<uint64_t> wakeUpTime_ = ConcurrentHelper::GetMilliseconds();
     std::atomic<WorkerState> state_ {WorkerState::IDLE};
     std::atomic<bool> hasExecuted_ = false; // false means this worker hasn't execute any tasks
-    Priority priority_ {Priority::DEFAULT};
+    std::atomic<Priority> priority_ {Priority::DEFAULT};
+    std::atomic<bool> threadInfoReady_ {false};
     pid_t tid_ = 0;
     std::vector<uint32_t> currentTaskId_ {};
     std::mutex currentTaskIdMutex_;
